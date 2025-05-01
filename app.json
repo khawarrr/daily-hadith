@@ -1,29 +1,80 @@
 {
   "expo": {
-    "name": "daily-Hadith",
-    "slug": "daily-Hadith",
+    "name": "Daily Hadith",
+    "slug": "daily-hadith",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "dailyhadith.free.com",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "dailyhadith.free.com"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "name": "Daily Hadith",
+      "shortName": "Hadith",
+      "description": "Daily Islamic Hadith with notifications",
+      "lang": "en",
+      "display": "standalone",
+      "startUrl": "/",
+      "scope": "/",
+      "themeColor": "#1e3a5f",
+      "backgroundColor": "#ffffff",
+      "icons": [
+        {
+          "src": "./assets/icon.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        },
+        {
+          "src": "./assets/icon.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "02256d75-5ba8-48d4-b36d-af0850d0c92d"
+      }
+    },
+    "owner": "khawarrr",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/02256d75-5ba8-48d4-b36d-af0850d0c92d"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "sounds": []
+        }
+      ]
+    ]
   }
 }
