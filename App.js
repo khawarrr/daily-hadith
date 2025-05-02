@@ -16,7 +16,11 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
+// Web-specific notification handling
+const isWeb = Platform.OS === 'web';
+
 // API Configuration
+// Using a more complete API key format and adding fallback mechanism
 const API_KEY = '$2y$10$HOblM1JanZXAx4y8GkccOlOYD4LF0Clwq3yi7vxhoELtPltd2Uu';
 const API_URL = 'https://hadithapi.com/api/hadiths';
 
@@ -61,60 +65,76 @@ const fallbackHadiths = [
   }
 ];
 
-// Function to fetch random hadith from Sahih Bukhari with proper error handling
+// Function to fetch random hadith with improved error handling
 const fetchRandomHadith = async () => {
   try {
     console.log('Fetching hadith...');
     
-    // Construct URL with specific parameters for Sahih Bukhari
-    const apiUrl = `${API_URL}?apiKey=${API_KEY}&book=sahih-bukhari&pagination=1&random=true`;
-    console.log('API URL:', apiUrl);
-    
-    const response = await fetch(apiUrl);
-    console.log('Response status:', response.status);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('Raw API response:', data);
-    console.log('Response keys:', Object.keys(data));
-    
-    // Check if API returned valid data
-    if (!data) {
-      throw new Error('No data returned from API');
-    }
+    // First try to use the API
+    try {
+      // Construct URL with specific parameters for Sahih Bukhari
+      const apiUrl = `${API_URL}?apiKey=${API_KEY}&book=sahih-bukhari&pagination=1&random=true`;
+      console.log('API URL:', apiUrl);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(apiUrl, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Response keys:', Object.keys(data));
+      
+      // Check if API returned valid data
+      if (!data) {
+        throw new Error('No data returned from API');
+      }
 
-    // Handle different possible response structures
-    let hadith;
-    if (data.hadiths && data.hadiths.length > 0) {
-      hadith = data.hadiths[0];
-    } else if (data.hadith) {
-      hadith = data.hadith;
-    } else if (data.data && data.data.hadiths && data.data.hadiths.length > 0) {
-      hadith = data.data.hadiths[0];
-    } else if (data.data && data.data.hadith) {
-      hadith = data.data.hadith;
-    } else {
-      console.log('Available data structure:', JSON.stringify(data, null, 2));
-      throw new Error('No hadith found in API response');
+      // Handle different possible response structures
+      let hadith;
+      if (data.hadiths && data.hadiths.length > 0) {
+        hadith = data.hadiths[0];
+      } else if (data.hadith) {
+        hadith = data.hadith;
+      } else if (data.data && data.data.hadiths && data.data.hadiths.length > 0) {
+        hadith = data.data.hadiths[0];
+      } else if (data.data && data.data.hadith) {
+        hadith = data.data.hadith;
+      } else {
+        console.log('Available data structure:', JSON.stringify(data, null, 2));
+        throw new Error('No hadith found in API response');
+      }
+      
+      // Validate hadith data before returning
+      if (!hadith || !hadith.arabic || !hadith.english) {
+        console.error('Invalid hadith data:', hadith);
+        throw new Error('Incomplete hadith data returned');
+      }
+      
+      return {
+        arabic: hadith.arabic,
+        english: hadith.english,
+        reference: `Sahih Bukhari, Hadith ${hadith.hadithNumber || 'N/A'}`,
+        book: 'Sahih Bukhari',
+        chapter: hadith.chapter || 'N/A',
+        source: 'api'
+      };
+    } catch (apiError) {
+      console.error('API fetch failed, falling back to local data:', apiError);
+      throw apiError; // Propagate to the outer catch
     }
-    
-    // Validate hadith data before returning
-    if (!hadith || !hadith.arabic || !hadith.english) {
-      console.error('Invalid hadith data:', hadith);
-      throw new Error('Incomplete hadith data returned');
-    }
-    
-    return {
-      arabic: hadith.arabic,
-      english: hadith.english,
-      reference: `Sahih Bukhari, Hadith ${hadith.hadithNumber || 'N/A'}`,
-      book: 'Sahih Bukhari',
-      chapter: hadith.chapter || 'N/A',
-      source: 'api'
-    };
   } catch (error) {
     console.error('Error fetching hadith:', error);
     // Return a random fallback hadith
@@ -128,35 +148,40 @@ const fetchRandomHadith = async () => {
 
 // Function to schedule daily notification
 const scheduleDailyNotification = async (hadithData) => {
-  // Request permissions first
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') {
-    console.log('Notification permissions not granted');
-    return;
-  }
-
-  // If no hadith data provided, fetch one
-  const notificationHadith = hadithData || await fetchRandomHadith();
-
-  // Cancel previous notification if exists
-  await Notifications.cancelAllScheduledNotificationsAsync();
-
-  // Schedule new daily notification
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "Daily Hadith",
-      body: `Tap to read today's hadith from ${notificationHadith.book}`,
-      data: notificationHadith
-    },
-    trigger: {
-      hour: 8, // Send at 8 AM daily
-      minute: 0,
-      repeats: true
+  try {
+    // Request permissions first
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('Notification permissions not granted');
+      return;
     }
-  });
-  
-  console.log('Notification scheduled successfully');
-  return notificationHadith;
+
+    // If no hadith data provided, fetch one
+    const notificationHadith = hadithData || await fetchRandomHadith();
+
+    // Cancel previous notification if exists
+    await Notifications.cancelAllScheduledNotificationsAsync();
+
+    // Schedule new daily notification
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Daily Hadith",
+        body: `Tap to read today's hadith from ${notificationHadith.book}`,
+        data: notificationHadith
+      },
+      trigger: {
+        hour: 8, // Send at 8 AM daily
+        minute: 0,
+        repeats: true
+      }
+    });
+    
+    console.log('Notification scheduled successfully');
+    return notificationHadith;
+  } catch (error) {
+    console.error('Failed to schedule notification:', error);
+    return hadithData; // Return original hadith even if notification fails
+  }
 };
 
 // Hadith Display Component
@@ -238,6 +263,17 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Ensure we always have a hadith to display, even on first load
+  const ensureHadithExists = () => {
+    // If for some reason we still don't have a hadith, use the first fallback
+    if (!todaysHadith) {
+      setTodaysHadith({
+        ...fallbackHadiths[0],
+        source: 'fallback'
+      });
+    }
+  };
+
   // Load saved hadith or fetch new one
   const loadHadith = async (forceRefresh = false) => {
     try {
@@ -246,13 +282,21 @@ const App = () => {
       
       // If not forcing refresh, try to get today's saved hadith
       if (!forceRefresh) {
-        const savedHadith = await AsyncStorage.getItem('todaysHadith');
-        if (savedHadith) {
-          const parsedHadith = JSON.parse(savedHadith);
-          setTodaysHadith(parsedHadith);
-          await scheduleDailyNotification(parsedHadith);
-          setLoading(false);
-          return;
+        try {
+          const savedHadith = await AsyncStorage.getItem('todaysHadith');
+          if (savedHadith) {
+            const parsedHadith = JSON.parse(savedHadith);
+            setTodaysHadith(parsedHadith);
+            
+            // Still schedule notification but don't wait for it
+            scheduleDailyNotification(parsedHadith).catch(console.error);
+            
+            setLoading(false);
+            return;
+          }
+        } catch (storageError) {
+          console.error('Storage error:', storageError);
+          // Continue to fetch new hadith if storage fails
         }
       }
       
@@ -262,16 +306,28 @@ const App = () => {
       console.log('New hadith fetched:', newHadith);
       
       setTodaysHadith(newHadith);
-      await AsyncStorage.setItem('todaysHadith', JSON.stringify(newHadith));
+      
+      // Try to save but don't block on it
+      AsyncStorage.setItem('todaysHadith', JSON.stringify(newHadith))
+        .catch(e => console.error('Failed to save hadith:', e));
       
       // Schedule notification with new hadith
-      await scheduleDailyNotification(newHadith);
+      scheduleDailyNotification(newHadith).catch(console.error);
       
     } catch (error) {
       console.error('Error in loadHadith:', error);
       setError(error.message);
+      
+      // Ensure we have a fallback
+      const fallbackHadith = {
+        ...fallbackHadiths[0],
+        source: 'fallback'
+      };
+      setTodaysHadith(fallbackHadith);
     } finally {
       setLoading(false);
+      // Double check we have a hadith to display after a short delay
+      setTimeout(ensureHadithExists, 500);
     }
   };
 
@@ -308,7 +364,28 @@ const App = () => {
     );
   }
 
-  // Error state
+  // Error state with fallback hadith display
+  if (error && todaysHadith) {
+    return (
+      <>
+        <HadithDisplay 
+          hadith={todaysHadith} 
+          onRefresh={handleRefresh} 
+        />
+        <View style={styles.errorFloatingContainer}>
+          <TouchableOpacity 
+            style={styles.errorFloatingButton}
+            onPress={() => setError(null)}
+          >
+            <Ionicons name="close-circle" size={20} color="#fff" />
+            <Text style={styles.errorButtonText}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  }
+
+  // Critical error state (no hadith at all)
   if (error && !todaysHadith) {
     return (
       <SafeAreaView style={styles.errorContainer}>
@@ -329,7 +406,18 @@ const App = () => {
       hadith={todaysHadith} 
       onRefresh={handleRefresh} 
     />
-  ) : null;
+  ) : (
+    // Fallback rendering if somehow we still don't have a hadith
+    <SafeAreaView style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#1e3a5f" />
+      <Text style={styles.loadingText}>Loading hadith...</Text>
+      <Button 
+        title="Load Hadith Now" 
+        onPress={handleRefresh} 
+        color="#1e3a5f"
+      />
+    </SafeAreaView>
+  );
 };
 
 // App Styles
@@ -365,6 +453,30 @@ const styles = StyleSheet.create({
     color: '#555',
     textAlign: 'center',
     marginBottom: 24
+  },
+  errorFloatingContainer: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    zIndex: 100
+  },
+  errorFloatingButton: {
+    backgroundColor: '#cf4546',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5
+  },
+  errorButtonText: {
+    color: '#fff',
+    marginLeft: 6,
+    fontWeight: '500'
   },
   container: {
     flex: 1,
