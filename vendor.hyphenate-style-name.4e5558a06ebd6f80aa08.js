@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdaily_hadith=self.webpackChunkdaily_hadith||[]).push([[881],{5685:(e,t,r)=>{r.r(t),r.d(t,{default:()=>h});var a=/[A-Z]/g,n=/^ms-/,s={};function u(e){return"-"+e.toLowerCase()}const h=function(e){if(s.hasOwnProperty(e))return s[e];var t=e.replace(a,u);return s[e]=n.test(t)?"-"+t:t}}}]);

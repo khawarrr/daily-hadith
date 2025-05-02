@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdaily_hadith=self.webpackChunkdaily_hadith||[]).push([[682],{6368:t=>{t.exports=t=>{if("[object Object]"!==Object.prototype.toString.call(t))return!1;const e=Object.getPrototypeOf(t);return null===e||e===Object.prototype}}}]);
